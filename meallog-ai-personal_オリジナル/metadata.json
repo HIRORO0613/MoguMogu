@@ -1,0 +1,7 @@
+{
+  "name": "MealLog AI Personal",
+  "description": "食事の記録、Gemini APIによる栄養分析、健康アドバイスを提供する個人向けダイエットサポートアプリ。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
