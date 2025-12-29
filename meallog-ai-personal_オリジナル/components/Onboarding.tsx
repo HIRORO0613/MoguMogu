@@ -46,8 +46,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       };
       
       onComplete(profile, plan.message);
-    } catch (e) {
-      alert("プランの作成に失敗しました。もう一度試してください。");
+    } catch (e: any) {
+      console.error(e);
+      alert(`プラン作成エラー: ${e?.message ?? String(e)}`);
       setIsLoading(false);
     }
   };
