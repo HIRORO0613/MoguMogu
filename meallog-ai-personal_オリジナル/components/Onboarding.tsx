@@ -123,7 +123,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   return (
     <div className="min-h-screen bg-sky-50 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md bg-white p-6 rounded-3xl shadow-xl space-y-8">
-        <h1 className="text-xl font-bold text-center text-gray-900">初期設定</h1>
+        <h1 className="text-xl font-bold text-center text-gray-900">初期設定V2</h1>
         
         {renderContent()}
 
