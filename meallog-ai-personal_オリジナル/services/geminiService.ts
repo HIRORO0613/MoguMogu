@@ -3,11 +3,15 @@ import { SYSTEM_INSTRUCTION, MASCOT_INSTRUCTION } from "../constants";
 import { MealAnalysisResult, UserProfile, MealLog, WeightLog } from "../types";
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+ /* const apiKey = process.env.API_KEY;
   if (!apiKey) {
     throw new Error("API_KEY is missing from environment variables.");
   }
+  return new GoogleGenAI({ apiKey });*/
+  const apiKey = import.meta.env.VITE_API_KEY;
+  if (!apiKey) throw new Error("VITE_API_KEY is missing");
   return new GoogleGenAI({ apiKey });
+
 };
 
 // --- Meal Analysis ---
