@@ -9,7 +9,7 @@ const getAiClient = () => {
 };
 
 const PRIMARY_MODEL = "gemini-3-flash-preview";
-const FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite"];
+const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
 
 const isRetryableError = (e: any) => {
   const msg = String(e?.message ?? e ?? "");
@@ -234,7 +234,9 @@ export const generateDietPlan = async (
    [PRIMARY_MODEL, ...FALLBACK_MODELS]
  );
 
-  return JSON.parse(response.text!) as any;
+  const plan = JSON.parse(response.text!) as any;
+  if (fallbackUsed) plan.message = `（混雑/制限のため ${usedModel} に切り替えました）\n` + plan.message;
+  return plan;
 };
 
 // --- Mascot Chat with Function Calling ---
