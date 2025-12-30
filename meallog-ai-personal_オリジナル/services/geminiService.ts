@@ -23,23 +23,23 @@ const isQuotaOrRateLimitError = (e: any) => {
     code === "429"
   );
 };
- 
- const generateContentWithFallback = async (ai: any, req: any, models: string[]) => {
-   let lastError: any = null;
- 
-   for (let i = 0; i < models.length; i++) {
-     const model = models[i];
-     try {
-       const response = await ai.models.generateContent({ ...req, model });
-       return { response, usedModel: model, fallbackUsed: i > 0 };
-     } catch (e: any) {
-       lastError = e;
-       if (!isQuotaOrRateLimitError(e) || i === models.length - 1) throw e;
-     }
-   }
- 
-   throw lastError;
- };
+
+const generateContentWithFallback = async (ai: any, req: any, models: string[]) => {
+  let lastError: any = null;
+
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    try {
+      const response = await ai.models.generateContent({ ...req, model });
+      return { response, usedModel: model, fallbackUsed: i > 0 };
+    } catch (e: any) {
+      lastError = e;
+      if (!isQuotaOrRateLimitError(e) || i === models.length - 1) throw e;
+    }
+  }
+
+  throw lastError;
+};
 
   const apiKey = import.meta.env.VITE_API_KEY;
   if (!apiKey) throw new Error("VITE_API_KEY is missing");
