@@ -41,11 +41,8 @@ const generateContentWithFallback = async (ai: any, req: any, models: string[]) 
   throw lastError;
 };
 
-  const apiKey = import.meta.env.VITE_API_KEY;
-  if (!apiKey) throw new Error("VITE_API_KEY is missing");
-  return new GoogleGenAI({ apiKey });
+// --- Meal Analysis ---
 
-};
 
 // --- Meal Analysis ---
 
@@ -68,7 +65,7 @@ export const analyzeMeal = async (
   recentLogs: MealLog[] = []
 ): Promise<MealAnalysisResult> => {
   const ai = getAiClient();
-  const modelId = "gemini-3-flash-preview"; 
+  //const modelId = "gemini-3-flash-preview"; 
 
   const parts: any[] = [];
   
