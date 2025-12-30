@@ -11,35 +11,60 @@ const getAiClient = () => {
 const PRIMARY_MODEL = "gemini-3-flash-preview";
 const FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite"];
 
-const isQuotaOrRateLimitError = (e: any) => {
+const isRetryableError = (e: any) => {
   const msg = String(e?.message ?? e ?? "");
-  const code = String(e?.status ?? e?.code ?? "");
+  const status = Number(e?.status ?? e?.code ?? 0);
+  const statusText = String(e?.statusText ?? "");
+
+  const lower = (msg + " " + statusText).toLowerCase();
+
+  if (status === 429) return true;
+  if (status === 500 || status === 503 || status === 504 || status === 408) return true;
+
   return (
     msg.includes("RESOURCE_EXHAUSTED") ||
     msg.includes("429") ||
-    msg.toLowerCase().includes("rate") ||
-    msg.toLowerCase().includes("quota") ||
-    msg.toLowerCase().includes("too many requests") ||
-    code === "429"
+    lower.includes("rate limit") ||
+    lower.includes("quota") ||
+    lower.includes("too many requests") ||
+    lower.includes("internal") ||
+    lower.includes("unavailable") ||
+    lower.includes("timeout") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror")
   );
 };
+
+const formatErrorShort = (e: any) => {
+  const status = e?.status ?? e?.code ?? "";
+  const message = String(e?.message ?? e ?? "");
+  const s = status ? `status=${status}` : "status=?";
+  return `${s} ${message}`.slice(0, 180);
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const generateContentWithFallback = async (ai: any, req: any, models: string[]) => {
   let lastError: any = null;
 
   for (let i = 0; i < models.length; i++) {
     const model = models[i];
-    try {
-      const response = await ai.models.generateContent({ ...req, model });
-      return { response, usedModel: model, fallbackUsed: i > 0 };
-    } catch (e: any) {
-      lastError = e;
-      if (!isQuotaOrRateLimitError(e) || i === models.length - 1) throw e;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({ ...req, model });
+        return { response, usedModel: model, fallbackUsed: i > 0, attempts: attempt + 1 };
+      } catch (e: any) {
+        lastError = e;
+        if (!isRetryableError(e)) throw e;
+        if (attempt === 0) await sleep(600);
+      }
     }
   }
 
   throw lastError;
 };
+
 
 // --- Meal Analysis ---
 
@@ -267,23 +292,24 @@ export interface ChatResponse {
   }[];
 }
 
+
 export const chatWithMascot = async (
-  message: string, 
-  userProfile: UserProfile, 
+  message: string,
+  userProfile: UserProfile,
   recentLogs: MealLog[],
   weightLogs: WeightLog[] = []
 ): Promise<ChatResponse> => {
-  const ai = getAiClient();
+  try {
+    const ai = getAiClient();
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayLogs = recentLogs.filter(l => l.dateLabel === today);
-  const todayCals = todayLogs.reduce((acc, l) => acc + l.calories, 0);
-  
-  // Calculate weight trend (last 3 entries)
-  const sortedWeights = [...weightLogs].sort((a, b) => b.timestamp - a.timestamp);
-  const latestWeights = sortedWeights.slice(0, 3).map(w => `${new Date(w.timestamp).toLocaleDateString()}: ${w.weight}kg`).join(', ');
+    const today = new Date().toISOString().split('T')[0];
+    const todayLogs = recentLogs.filter(l => l.dateLabel === today);
+    const todayCals = todayLogs.reduce((acc, l) => acc + l.calories, 0);
 
-  const context = `
+    const sortedWeights = [...weightLogs].sort((a, b) => b.timestamp - a.timestamp);
+    const latestWeights = sortedWeights.slice(0, 3).map(w => `${new Date(w.timestamp).toLocaleDateString()}: ${w.weight}kg`).join(', ');
+
+    const context = `
   現在の日時: ${new Date().toLocaleString('ja-JP')}
   ユーザー名: ${userProfile.name}
   今日の摂取カロリー: ${Math.round(todayCals)} / 目標 ${userProfile.targetCalories} kcal
@@ -291,37 +317,37 @@ export const chatWithMascot = async (
   直近の体重記録: ${latestWeights}
   `;
 
-  const prompt = `
+    const prompt = `
   ${context}
   ユーザーのメッセージ: ${message}
   `;
 
-  const { response, usedModel, fallbackUsed } = await generateContentWithFallback(
-   ai,
-   {
-     contents: prompt,
-     config: {
-       systemInstruction: MASCOT_INSTRUCTION,
-       tools: [{ functionDeclarations: [addMealLogTool, updateUserProfileTool, addWeightLogTool] }]
-     }
-   },
-   [PRIMARY_MODEL, ...FALLBACK_MODELS]
- );
- 
- const toolCalls = response.functionCalls;
- const notice = fallbackUsed ? `（混雑のため ${usedModel} に切り替えました）\n` : "";
- const text = notice + (response.text || "");
+    const { response, usedModel, fallbackUsed, attempts } = await generateContentWithFallback(
+      ai,
+      {
+        contents: prompt,
+        config: {
+          systemInstruction: MASCOT_INSTRUCTION,
+          tools: [{ functionDeclarations: [addMealLogTool, updateUserProfileTool, addWeightLogTool] }]
+        }
+      },
+      [PRIMARY_MODEL, ...FALLBACK_MODELS]
+    );
 
+    const toolCalls = response.functionCalls;
+    const notice = fallbackUsed ? `（混雑/不調のため ${usedModel} に切り替えました）\n` : "";
+    const text = notice + (response.text || "");
 
-  if (toolCalls && toolCalls.length > 0) {
-    return {
-      text: text,
-      toolCalls: toolCalls.map(fc => ({
-        name: fc.name,
-        args: fc.args
-      }))
-    };
+    if (toolCalls && toolCalls.length > 0) {
+      return {
+        text,
+        toolCalls: toolCalls.map(fc => ({ name: fc.name, args: fc.args }))
+      };
+    }
+
+    return { text: text || "モグ？" };
+  } catch (e: any) {
+    console.error("chatWithMascot failed:", e);
+    return { text: `ごめんね、ちょっと調子が悪いモグ...（${formatErrorShort(e)}）` };
   }
-
-  return { text: text || "モグ？" };
 };
