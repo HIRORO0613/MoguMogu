@@ -210,7 +210,7 @@ export const generateDietPlan = async (
   durationMonths: number
 ): Promise<{ targetCalories: number; targetP: number; targetF: number; targetC: number; message: string }> => {
   const ai = getAiClient();
-  
+
   const prompt = `
   ユーザー情報:
   現在の体重: ${currentWeight}kg
@@ -221,23 +221,24 @@ export const generateDietPlan = async (
   また、目標達成のためにどのような食生活を送るべきか、モグちゃんのキャラクター（語尾はモグ）で優しくアドバイスしてください。
   `;
 
-  const { response } = await generateContentWithFallback(
-   ai,
-   {
-     contents: prompt,
-     config: {
-       systemInstruction: "あなたはダイエットアプリのキャラクター「モグちゃん」です。",
-       responseMimeType: "application/json",
-       responseSchema: planSchema
-     }
-   },
-   [PRIMARY_MODEL, ...FALLBACK_MODELS]
- );
+  const { response, usedModel, fallbackUsed } = await generateContentWithFallback(
+    ai,
+    {
+      contents: prompt,
+      config: {
+        systemInstruction: "あなたはダイエットアプリのキャラクター「モグちゃん」です。",
+        responseMimeType: "application/json",
+        responseSchema: planSchema
+      }
+    },
+    [PRIMARY_MODEL, ...FALLBACK_MODELS]
+  );
 
   const plan = JSON.parse(response.text!) as any;
   if (fallbackUsed) plan.message = `（混雑/制限のため ${usedModel} に切り替えました）\n` + plan.message;
   return plan;
 };
+
 
 // --- Mascot Chat with Function Calling ---
 
