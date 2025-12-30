@@ -422,53 +422,74 @@ const App: React.FC = () => {
     }
   };
 
-  const executeToolCalls = () => {
-      if (!pendingToolCalls || !profile) return;
+ const executeToolCalls = async () => {
+  if (!pendingToolCalls || !profile) return;
 
-      pendingToolCalls.forEach(({ name, args }) => {
-          if (name === "add_meal_log") {
-              const timestamp = new Date(args.date_iso).getTime();
-              const newLog: MealLog = {
-                  id: Date.now().toString() + Math.random().toString(), 
-                  item_name: args.item_name,
-                  calories: Math.round(args.calories),
-                  p: Math.round(args.p * 10) / 10,
-                  f: Math.round(args.f * 10) / 10,
-                  c: Math.round(args.c * 10) / 10,
-                  advice: args.advice || "手動追加",
-                  is_snack: args.is_snack !== undefined ? args.is_snack : false,
-                  timestamp: timestamp,
-                  dateLabel: getAdjustedDateLabel(new Date(timestamp)),
-              };
-              setLogs(prev => [newLog, ...prev]);
-          } 
-          else if (name === "add_weight_log") {
-              const timestamp = new Date(args.date_iso).getTime();
-              const weightVal = parseFloat(args.weight);
-              const newLog: WeightLog = {
-                  id: Date.now().toString() + Math.random().toString(),
-                  weight: weightVal,
-                  timestamp: timestamp,
-                  dateLabel: getAdjustedDateLabel(new Date(timestamp))
-              };
-              setWeightLogs(prev => [...prev, newLog]);
-              setProfile(prev => prev ? {...prev, currentWeight: weightVal} : null);
-          }
-          else if (name === "update_user_profile") {
-              setProfile(prev => {
-                 if (!prev) return null;
-                 return {
-                     ...prev,
-                     targetWeight: args.targetWeight || prev.targetWeight,
-                     targetCalories: args.targetCalories || prev.targetCalories
-                 }
-              });
-          }
+  const calls = pendingToolCalls;
+  setPendingToolCalls(null);
+
+  let currentWeightForAdvice = profile.currentWeight ?? null;
+
+  for (const { name, args } of calls) {
+    if (name === 'add_meal_log') {
+      const timestamp = new Date(args.date_iso).getTime();
+      const newLog: MealLog = {
+        id: Date.now().toString() + Math.random().toString(),
+        item_name: args.item_name,
+        calories: Math.round(args.calories),
+        p: Math.round(args.p * 10) / 10,
+        f: Math.round(args.f * 10) / 10,
+        c: Math.round(args.c * 10) / 10,
+        advice: args.advice || '手動追加',
+        is_snack: args.is_snack !== undefined ? args.is_snack : false,
+        timestamp: timestamp,
+        dateLabel: getAdjustedDateLabel(new Date(timestamp))
+      };
+      setLogs(prev => [newLog, ...prev]);
+      continue;
+    }
+
+    if (name === 'add_weight_log') {
+      const timestamp = new Date(args.date_iso).getTime();
+      const weightVal = typeof args.weight === 'number' ? args.weight : parseFloat(args.weight);
+
+      let advice = '';
+      try {
+        advice = await generateWeightAdvice(weightVal, currentWeightForAdvice, profile.targetWeight || 0);
+      } catch {
+        advice = '記録しました。';
+      }
+
+      const newLog: WeightLog = {
+        id: Date.now().toString() + Math.random().toString(),
+        weight: weightVal,
+        timestamp: timestamp,
+        dateLabel: getAdjustedDateLabel(new Date(timestamp)),
+        advice: advice
+      };
+
+      setWeightLogs(prev => [...prev, newLog]);
+      setProfile(prev => (prev ? { ...prev, currentWeight: weightVal } : null));
+      currentWeightForAdvice = weightVal;
+      continue;
+    }
+
+    if (name === 'update_user_profile') {
+      setProfile(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          targetWeight: args.targetWeight || prev.targetWeight,
+          targetCalories: args.targetCalories || prev.targetCalories
+        };
       });
-      
-      setChatHistory(prev => [...prev, { role: 'model', text: `記録したモグ！`, timestamp: Date.now() }]);
-      setPendingToolCalls(null);
-  };
+      continue;
+    }
+  }
+
+  setChatHistory(prev => [...prev, { role: 'model', text: `記録したモグ！`, timestamp: Date.now() }]);
+};
+
 
   const cancelToolCalls = () => {
       setPendingToolCalls(null);
