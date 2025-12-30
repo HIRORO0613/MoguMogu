@@ -8,6 +8,39 @@ const getAiClient = () => {
     throw new Error("API_KEY is missing from environment variables.");
   }
   return new GoogleGenAI({ apiKey });*/
+ const PRIMARY_MODEL = "gemini-3-flash-preview";
+ const FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite"];
+ 
+ const isQuotaOrRateLimitError = (e: any) => {
+   const msg = String(e?.message ?? e ?? "");
+   const code = String(e?.status ?? e?.code ?? "");
+   return (
+     msg.includes("RESOURCE_EXHAUSTED") ||
+     msg.includes("429") ||
+     msg.toLowerCase().includes("rate") ||
+     msg.toLowerCase().includes("quota") ||
+     msg.toLowerCase().includes("too many requests") ||
+     code === "429"
+   );
+ };
+ 
+ const generateContentWithFallback = async (ai: any, req: any, models: string[]) => {
+   let lastError: any = null;
+ 
+   for (let i = 0; i < models.length; i++) {
+     const model = models[i];
+     try {
+       const response = await ai.models.generateContent({ ...req, model });
+       return { response, usedModel: model, fallbackUsed: i > 0 };
+     } catch (e: any) {
+       lastError = e;
+       if (!isQuotaOrRateLimitError(e) || i === models.length - 1) throw e;
+     }
+   }
+ 
+   throw lastError;
+ };
+
   const apiKey = import.meta.env.VITE_API_KEY;
   if (!apiKey) throw new Error("VITE_API_KEY is missing");
   return new GoogleGenAI({ apiKey });
@@ -62,15 +95,19 @@ export const analyzeMeal = async (
   
   parts.push({ text: `${contextText}\nこの食事を分析してください。` });
 
-  const response = await ai.models.generateContent({
-    model: modelId,
-    contents: { parts },
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema: mealSchema,
-    },
-  });
+  const { response } = await generateContentWithFallback(
+   ai,
+   {
+     contents: { parts },
+     config: {
+       systemInstruction: SYSTEM_INSTRUCTION,
+       responseMimeType: "application/json",
+       responseSchema: mealSchema
+     }
+   },
+   [PRIMARY_MODEL, ...FALLBACK_MODELS]
+ );
+
 
   const text = response.text;
   if (!text) throw new Error("No response");
@@ -113,15 +150,19 @@ export const generateWeightAdvice = async (
     `;
 
     // Use SYSTEM_INSTRUCTION (Nutritionist role) instead of MASCOT_INSTRUCTION
-    const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-            systemInstruction: SYSTEM_INSTRUCTION,
-            responseMimeType: "application/json",
-            responseSchema: weightAdviceSchema,
-        }
-    });
+    const { response } = await generateContentWithFallback(
+     ai,
+     {
+       contents: prompt,
+       config: {
+         systemInstruction: SYSTEM_INSTRUCTION,
+         responseMimeType: "application/json",
+         responseSchema: weightAdviceSchema
+       }
+     },
+     [PRIMARY_MODEL, ...FALLBACK_MODELS]
+   );
+   
 
     const res = JSON.parse(response.text!) as { advice: string };
     return res.advice;
@@ -158,15 +199,18 @@ export const generateDietPlan = async (
   また、目標達成のためにどのような食生活を送るべきか、モグちゃんのキャラクター（語尾はモグ）で優しくアドバイスしてください。
   `;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
-    config: {
-      systemInstruction: "あなたはダイエットアプリのキャラクター「モグちゃん」です。",
-      responseMimeType: "application/json",
-      responseSchema: planSchema,
-    },
-  });
+  const { response } = await generateContentWithFallback(
+   ai,
+   {
+     contents: prompt,
+     config: {
+       systemInstruction: "あなたはダイエットアプリのキャラクター「モグちゃん」です。",
+       responseMimeType: "application/json",
+       responseSchema: planSchema
+     }
+   },
+   [PRIMARY_MODEL, ...FALLBACK_MODELS]
+ );
 
   return JSON.parse(response.text!) as any;
 };
@@ -255,17 +299,22 @@ export const chatWithMascot = async (
   ユーザーのメッセージ: ${message}
   `;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
-    config: {
-      systemInstruction: MASCOT_INSTRUCTION,
-      tools: [{ functionDeclarations: [addMealLogTool, updateUserProfileTool, addWeightLogTool] }],
-    },
-  });
+  const { response, usedModel, fallbackUsed } = await generateContentWithFallback(
+   ai,
+   {
+     contents: prompt,
+     config: {
+       systemInstruction: MASCOT_INSTRUCTION,
+       tools: [{ functionDeclarations: [addMealLogTool, updateUserProfileTool, addWeightLogTool] }]
+     }
+   },
+   [PRIMARY_MODEL, ...FALLBACK_MODELS]
+ );
+ 
+ const toolCalls = response.functionCalls;
+ const notice = fallbackUsed ? `（混雑のため ${usedModel} に切り替えました）\n` : "";
+ const text = notice + (response.text || "");
 
-  const toolCalls = response.functionCalls;
-  const text = response.text || "";
 
   if (toolCalls && toolCalls.length > 0) {
     return {
