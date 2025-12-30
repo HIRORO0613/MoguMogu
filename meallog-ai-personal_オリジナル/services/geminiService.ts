@@ -3,26 +3,26 @@ import { SYSTEM_INSTRUCTION, MASCOT_INSTRUCTION } from "../constants";
 import { MealAnalysisResult, UserProfile, MealLog, WeightLog } from "../types";
 
 const getAiClient = () => {
- /* const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY is missing from environment variables.");
-  }
-  return new GoogleGenAI({ apiKey });*/
- const PRIMARY_MODEL = "gemini-3-flash-preview";
- const FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite"];
- 
- const isQuotaOrRateLimitError = (e: any) => {
-   const msg = String(e?.message ?? e ?? "");
-   const code = String(e?.status ?? e?.code ?? "");
-   return (
-     msg.includes("RESOURCE_EXHAUSTED") ||
-     msg.includes("429") ||
-     msg.toLowerCase().includes("rate") ||
-     msg.toLowerCase().includes("quota") ||
-     msg.toLowerCase().includes("too many requests") ||
-     code === "429"
-   );
- };
+  const apiKey = import.meta.env.VITE_API_KEY;
+  if (!apiKey) throw new Error("VITE_API_KEY is missing");
+  return new GoogleGenAI({ apiKey });
+};
+
+const PRIMARY_MODEL = "gemini-3-flash-preview";
+const FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite"];
+
+const isQuotaOrRateLimitError = (e: any) => {
+  const msg = String(e?.message ?? e ?? "");
+  const code = String(e?.status ?? e?.code ?? "");
+  return (
+    msg.includes("RESOURCE_EXHAUSTED") ||
+    msg.includes("429") ||
+    msg.toLowerCase().includes("rate") ||
+    msg.toLowerCase().includes("quota") ||
+    msg.toLowerCase().includes("too many requests") ||
+    code === "429"
+  );
+};
  
  const generateContentWithFallback = async (ai: any, req: any, models: string[]) => {
    let lastError: any = null;
