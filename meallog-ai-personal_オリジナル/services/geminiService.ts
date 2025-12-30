@@ -185,7 +185,7 @@ const addMealLogTool: FunctionDeclaration = {
       p: { type: Type.NUMBER, description: "タンパク質 (g)。推測値" },
       f: { type: Type.NUMBER, description: "脂質 (g)。推測値" },
       c: { type: Type.NUMBER, description: "炭水化物 (g)。推測値" },
-      advice: { type: Type.STRING, description: "この食事に対する栄養面での短いアドバイス (例: 「タンパク質が摂れてえらいモグ！」など)" },
+      advice: { type: Type.STRING, description: "この食事に対する栄養面での短いアドバイス（100文字程度）。重要: キャラクター語尾（〜モグ等）は禁止。丁寧な「〜です」「〜ます」調の平文。" },
       is_snack: { type: Type.BOOLEAN, description: "間食かどうか" },
       date_iso: { type: Type.STRING, description: "食事をした日時 (ISO 8601 format, e.g. 2023-10-27T12:00:00)。指定がない場合は現在日時。" }
     },
