@@ -9,7 +9,7 @@ const getAiClient = () => {
 };
 
 const PRIMARY_MODEL = "gemini-3-flash-preview";
-const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite","gemma-3-27b"];
 
 const isRetryableError = (e: any) => {
   const msg = String(e?.message ?? e ?? "");
